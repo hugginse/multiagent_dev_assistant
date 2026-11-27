@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.config import get_settings
+from app.config import load_settings
 from app.sandbox.jail import PathJailError, ensure_within, resolve_in_workspace
 
 DEFAULT_TIMEOUT_S = 120.0
@@ -67,7 +67,8 @@ def truncate_output(text: str, limit: int = DEFAULT_OUTPUT_LIMIT) -> tuple[str, 
 
 
 def workspace_root() -> Path:
-    root = Path(get_settings().workspace_root)
+    # 每次 load（不走 lru_cache），保证测试 monkeypatch WORKSPACE_ROOT 生效
+    root = Path(load_settings().workspace_root)
     root.mkdir(parents=True, exist_ok=True)
     return root.resolve()
 
@@ -168,7 +169,7 @@ def run_command(
     cwd_path = Path(cwd).resolve()
     if not cwd_path.is_dir():
         raise WorkspaceError(f"cwd 不存在: {cwd_path}")
-    timeout = timeout_s if timeout_s is not None else get_settings().tool_timeout_s
+    timeout = timeout_s if timeout_s is not None else load_settings().tool_timeout_s
     started = time.monotonic()
     try:
         proc = subprocess.run(  # noqa: S603 — argv 白名单由上层保证，无 shell
