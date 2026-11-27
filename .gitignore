@@ -1,0 +1,33 @@
+# 环境与解释器
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# 本地配置与密钥
+.env
+.env.local
+*.local
+
+# 运行时数据（sqlite / chroma / workspaces / runs / reports）
+data/
+
+# 编辑器 / 系统
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# uv
+uv.lock.bak
