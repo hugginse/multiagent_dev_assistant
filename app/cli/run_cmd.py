@@ -1,4 +1,4 @@
-"""run 子命令：单任务运行（M1 骨架，M1 feature 15 接事件流）。"""
+"""run 子命令：单任务运行 + 终端事件订阅（真流式）。"""
 
 from __future__ import annotations
 
@@ -14,8 +14,9 @@ def run(
     suite: str = typer.Option("smoke", "--suite", "-s", help="套件名"),
     provider: str | None = typer.Option(None, "--provider", "-p", help="ollama|openai|anthropic"),
     memory: str = typer.Option("off", "--memory", help="on|off"),
+    no_llm_stream: bool = typer.Option(False, "--no-llm-stream", help="不打印 llm_delta"),
 ) -> None:
-    """运行单个任务，终端实时事件流。"""
+    """运行单个任务，终端实时事件流（node/tool/llm_delta/test_result）。"""
     if ctx.invoked_subcommand is not None:
         return
     if not task:
@@ -29,5 +30,6 @@ def run(
         suite=suite,
         provider=provider,
         memory=memory,
+        show_llm=not no_llm_stream,
     )
     raise typer.Exit(code)

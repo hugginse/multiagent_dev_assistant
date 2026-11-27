@@ -1,10 +1,12 @@
-"""run 命令实现：调 harness runner + 终端事件订阅（M1 骨架）。"""
+"""run 命令实现：harness runner + 终端事件订阅（真流式）。"""
 
 from __future__ import annotations
 
 from rich.console import Console
 
-console = Console(stderr=False)
+from app.cli.events_view import TerminalEventSubscriber
+
+console = Console()
 
 
 def execute_run(
@@ -13,6 +15,7 @@ def execute_run(
     suite: str,
     provider: str | None,
     memory: str,
+    show_llm: bool = True,
 ) -> int:
     """返回进程退出码：0 成功，1 失败，2 配置错误。"""
     from app.config import load_settings
@@ -40,16 +43,21 @@ def execute_run(
         console.print(f"[red]配置错误:[/red] {e}")
         return 2
 
+    viewer = TerminalEventSubscriber(show_llm_delta=show_llm, console_=console)
+
     try:
         outcome = run_single_task(
             task,
             suite=suite,
             provider=prov,
             memory_on=memory_on,
+            event_subscribers=[viewer],
         )
     except Exception as e:  # noqa: BLE001
+        viewer.finish()
         console.print(f"[red]运行失败:[/red] {e}")
         return 2
+    viewer.finish()
 
     m = outcome.metrics
     style = "green" if m.resolve else "yellow"
@@ -59,6 +67,7 @@ def execute_run(
         f"pass_ratio={m.test_pass_ratio:.2f} iterations={m.iterations} "
         f"wall={m.wall_s:.1f}s"
     )
+    console.print(f"回放: uv run devassist runs show {outcome.run_id} --events")
     if m.resolve:
         return 0
     return 1

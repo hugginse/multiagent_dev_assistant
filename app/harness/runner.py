@@ -18,6 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -30,10 +31,7 @@ from app.db.session import create_checkpointer, session_scope
 from app.events import EventStore, EventType, assert_seq_monotonic, load_events
 from app.harness.loader import resolve_hidden_test_paths, suite_dir
 from app.harness.schema import RunMetrics, TaskDefinition
-from app.sandbox.workspace import (
-    prepare_workspace,
-    run_command,
-)
+from app.sandbox.workspace import prepare_workspace, run_command
 
 
 def new_run_id() -> str:
@@ -65,39 +63,37 @@ def compute_diff(workspace: Path, baseline: Path) -> str:
     import subprocess
     import sys
 
+    script = r"""
+import difflib, pathlib, sys
+
+def walk(a: pathlib.Path, b: pathlib.Path, out: list[str]) -> None:
+    if a.is_file() and b.is_file():
+        if a.read_bytes() != b.read_bytes():
+            al = a.read_text(errors="replace").splitlines(True)
+            bl = b.read_text(errors="replace").splitlines(True)
+            out.extend(difflib.unified_diff(al, bl, fromfile=str(a), tofile=str(b)))
+        return
+    if a.is_dir() and b.is_dir():
+        names = sorted(set(p.name for p in a.iterdir()) | set(p.name for p in b.iterdir()))
+        for name in names:
+            if name in {"__pycache__", ".git", ".pytest_cache", ".venv"}:
+                continue
+            walk(a / name, b / name, out)
+        return
+    if a.is_file() and (not b.exists()):
+        out.append(f"--- {a}\n+++ /dev/null\n")
+        out.extend(f"-{line}" for line in a.read_text(errors="replace").splitlines(True))
+    if (not a.exists()) and b.is_file():
+        out.append(f"--- /dev/null\n+++ {b}\n")
+        out.extend(f"+{line}" for line in b.read_text(errors="replace").splitlines(True))
+
+out: list[str] = []
+walk(pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), out)
+print("".join(out), end="")
+"""
     try:
         proc = subprocess.run(  # noqa: S603
-            [
-                sys.executable,
-                "-c",
-                (
-                    "import pathlib,sys;"
-                    "from filecmp import dircmp;\n"
-                    "def walk(dc, base_a, base_b, out):\n"
-                    "    for name in dc.left_only:\n"
-                    "        out.append(f'--- {base_a}/{name}\\n+++ /dev/null\\n');\n"
-                    "    for name in dc.right_only:\n"
-                    "        p=pathlib.Path(base_b)/name\n"
-                    "        if p.is_file():\n"
-                    "            out.append(f'--- /dev/null\\n+++ {base_b}/{name}\\n'+p.read_text(errors='replace'))\n"
-                    "    for name in dc.same_files:\n"
-                    "        pass\n"
-                    "    for name in dc.diff_files:\n"
-                    "        a=pathlib.Path(base_a)/name; b=pathlib.Path(base_b)/name\n"
-                    "        out.append(f'--- {base_a}/{name}\\n+++ {base_b}/{name}\\n')\n"
-                    "        import difflib\n"
-                    "        out.extend(difflib.unified_diff(a.read_text(errors='replace').splitlines(True),\n"
-                    "                                        b.read_text(errors='replace').splitlines(True),\n"
-                    "                                        fromfile=str(a), tofile=str(b)))\n"
-                    "    for sub in dc.subdirs.values():\n"
-                    "        walk(sub, base_a+'/'+sub.left, base_b+'/'+sub.right, out)\n"
-                    "out=[]\n"
-                    "walk(dircmp(str(sys.argv[1]), str(sys.argv[2])), sys.argv[1], sys.argv[2], out)\n"
-                    "print(''.join(out), end='')\n"
-                ),
-                str(baseline),
-                str(workspace),
-            ],
+            [sys.executable, "-c", script, str(baseline), str(workspace)],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -122,8 +118,6 @@ def score_hidden_tests(
         return 0, 0, "(no hidden tests)", 0
 
     rels: list[str] = []
-
-    # 注入到隐藏测试目录的相对结构
     hidden_root = suite_dir(suite) / "hidden_tests"
     for p in paths:
         try:
@@ -138,14 +132,12 @@ def score_hidden_tests(
     cmd = ["python", "-m", "pytest", "-q", *rels]
     r = run_command(cmd, cwd=workspace, timeout_s=timeout_s, output_limit=20_000)
     out = (r.stdout + "\n" + r.stderr).strip()
-    # 解析 pytest 摘要
     passed, failed = _parse_pytest_counts(out)
     if r.timed_out:
         return passed, max(failed, 1), out[-2000:], -1
     if r.returncode == 0 and failed == 0 and passed > 0:
         return passed, 0, out[-2000:], 0
     if r.returncode == 0 and passed == 0:
-        # 没有收集到测试视为失败
         return 0, 1, out[-2000:], r.returncode
     return passed, max(failed, 1 if passed == 0 and failed == 0 else failed), out[-2000:], r.returncode
 
@@ -155,14 +147,12 @@ def _parse_pytest_counts(output: str) -> tuple[int, int]:
     import re
 
     passed = failed = 0
-    # 形如: 12 passed, 3 failed in 0.5s  或  5 failed
     m = re.search(r"(\d+)\s+passed", output)
     if m:
         passed = int(m.group(1))
     m = re.search(r"(\d+)\s+failed", output)
     if m:
         failed = int(m.group(1))
-    # 纯点号 quiet 模式失败时可能只有 failed
     return passed, failed
 
 
@@ -179,16 +169,20 @@ def run_single_task(
     session: Session | None = None,
     on_node_test: Callable[[AgentState], TestRecord] | None = None,
     with_hidden_scoring: bool = True,
+    event_subscribers: list[Callable[[Any], None]] | None = None,
 ) -> RunOutcome:
-    """端到端执行一个任务。session 为 None 时自建事务。"""
+    """端到端执行一个任务。session 为 None 时自建事务。
+
+    ``event_subscribers``: 展示层回调（CLI 实时打印）；事件仍先落库再通知。
+    """
     settings = load_settings()
     rid = run_id or new_run_id()
     prov = provider or settings.llm_provider
     mdl = model or settings.resolve_llm_model()
 
     owned_session = session is None
+    cm = None
     if owned_session:
-        # 确保表存在
         from app.db.session import init_db
 
         init_db()
@@ -197,7 +191,6 @@ def run_single_task(
     assert session is not None
 
     try:
-        # 落库 run 行
         run_row = RunRow(
             id=rid,
             task_id=task.id,
@@ -209,9 +202,12 @@ def run_single_task(
             iteration=0,
         )
         session.add(run_row)
-        session.flush()
+        session.commit()
 
         events = EventStore(session, rid)
+        for sub in event_subscribers or []:
+            events.subscribe(sub)
+
         events.emit(
             EventType.RUN_STARTED,
             {
@@ -228,12 +224,10 @@ def run_single_task(
                 {"chars": len(memory_context), "preview": memory_context[:200]},
             )
 
-        # workspace（不含隐藏测试）
         repo_path = find_repo_root(task.repo)
         baseline = repo_path
         ws = prepare_workspace(repo_path, rid, hidden_tests=None)
 
-        # 真实测试回调：Agent 运行期在 workspace 跑可见测试
         def _default_on_test(state: AgentState) -> TestRecord:
             it = int(state.get("iteration") or 0)
             r = run_command(
@@ -243,9 +237,6 @@ def run_single_task(
                 output_limit=8000,
             )
             passed, failed = _parse_pytest_counts((r.stdout + r.stderr).strip())
-            if r.returncode == 0 and passed == 0 and failed == 0:
-                # 无 tests 目录等情况
-                passed, failed = (0, 0) if r.returncode == 0 else (0, 1)
             return TestRecord(
                 iteration=it,
                 passed=passed,
@@ -279,7 +270,6 @@ def run_single_task(
                 workspace=ws,
             )
 
-        # 隐藏测试评分（Agent 不可见；评分阶段注入）
         passed = failed = 0
         score_out = ""
         score_rc = 0
@@ -303,10 +293,8 @@ def run_single_task(
         resolve = failed == 0 and passed > 0
         iteration = int(final.get("iteration") or 0)
         max_hit = iteration >= int(final.get("max_iterations") or task.max_iterations)
-        status = "success" if resolve else (
-            "timeout" if final.get("status") == "timeout" else "success"
-        )
-        # 即使 hidden 全过，图 timeout 也如实记录
+
+        status = "success"
         if final.get("status") == "timeout" and not resolve:
             status = "timeout"
         if final.get("status") == "error":
@@ -317,7 +305,7 @@ def run_single_task(
             test_pass_ratio=ratio,
             iterations=iteration,
             max_hit=max_hit,
-            tool_calls={},  # M2 扩展
+            tool_calls={},
             tokens_in=0,
             tokens_out=0,
             wall_s=wall,
@@ -325,9 +313,10 @@ def run_single_task(
             error=final.get("error") or None,
         )
         if score_out and not resolve:
-            metrics.error = (metrics.error or "") + f" | hidden: {score_out[-500:]}"
+            metrics.error = ((metrics.error or "") + f" | hidden: {score_out[-500:]}").strip(
+                " |"
+            )
 
-        # 保存 diff
         diff_dir = Path("data") / "runs" / rid
         diff_dir.mkdir(parents=True, exist_ok=True)
         diff_path = diff_dir / "diff.patch"
@@ -347,8 +336,8 @@ def run_single_task(
             workspace=ws,
         )
     finally:
-        if owned_session:
-            cm.__exit__(None, None, None)  # type: ignore[possibly-undefined]
+        if owned_session and cm is not None:
+            cm.__exit__(None, None, None)
 
 
 def _finalize_run(
@@ -370,4 +359,4 @@ def _finalize_run(
         EventType.RUN_FINISHED,
         {"status": status, "metrics": metrics.to_dict()},
     )
-    session.flush()
+    session.commit()
