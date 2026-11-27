@@ -77,12 +77,17 @@ class EventStore:
             fn(ev)
 
     def emit(self, event_type: EventType | str, payload: dict[str, Any] | None = None) -> Event:
-        """分配 seq → 落库（flush）→ 通知订阅者。"""
+        """分配 seq → 落库（flush+commit）→ 通知订阅者。
+
+        每条事件立即 commit：SQLite 单写者下避免与 checkpointer 长事务锁冲突，
+        同时满足「先落库再展示」。
+        """
         self._seq += 1
         et = EventType(event_type) if not isinstance(event_type, EventType) else event_type
         ev = Event(type=et, payload=payload or {}, run_id=self._run_id, seq=self._seq, ts=utcnow())
         self._session.add(ev.to_row())
         self._session.flush()  # 先落库
+        self._session.commit()  # 释放 SQLite 写锁，供 checkpointer 并发写
         self._buffer.append(ev)
         for fn in self._subscribers:
             with contextlib.suppress(Exception):  # 展示层错误不阻断核心
