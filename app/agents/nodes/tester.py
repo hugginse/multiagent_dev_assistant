@@ -49,7 +49,7 @@ def tester_node(
             if events is not None:
                 events.emit(
                     EventType.TOOL_CALL,
-                    {"name": "run_tests", "args": {"path": "tests"}, "node": "tester"},
+                    {"name": "run_tests", "args": {"path": "tests"}, "node": "tester", "tier": "X"},
                 )
             r = run_command(
                 [sys.executable, "-m", "pytest", "-q", "tests"],

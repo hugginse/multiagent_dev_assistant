@@ -33,11 +33,32 @@ class Report:
     items: list[dict[str, Any]] = field(default_factory=list)
     pass_at_k: dict[str, float] = field(default_factory=dict)
     resolve_rate: float = 0.0
+    tool_calls_by_tier: dict[str, int] = field(default_factory=dict)
+    max_hit_rate: float = 0.0
     created_at: str = ""
     notes: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+def aggregate_tool_calls_by_tier(items: list[dict[str, Any]]) -> dict[str, int]:
+    """汇总全部 item 的 tool_calls（按 tier 相加）。"""
+    out: dict[str, int] = {}
+    for it in items:
+        tc = it.get("tool_calls") or {}
+        if not isinstance(tc, dict):
+            continue
+        for tier, n in tc.items():
+            out[str(tier)] = out.get(str(tier), 0) + int(n or 0)
+    return out
+
+
+def max_hit_rate(items: list[dict[str, Any]]) -> float:
+    if not items:
+        return 0.0
+    hits = sum(1 for i in items if i.get("max_hit"))
+    return hits / len(items)
 
 
 def compute_pass_at_k(items: list[dict[str, Any]], tasks_ids: list[str], k: int) -> dict[str, float]:
@@ -81,6 +102,8 @@ def build_report(
         items=items,
         pass_at_k=compute_pass_at_k(items, task_ids, k),
         resolve_rate=resolve_rate,
+        tool_calls_by_tier=aggregate_tool_calls_by_tier(items),
+        max_hit_rate=max_hit_rate(items),
         created_at=datetime.now(UTC).isoformat(),
         notes=notes,
     )
@@ -108,16 +131,22 @@ def render_markdown(report: Report) -> str:
         f"- created_at: {report.created_at}",
         f"- resolve_rate: **{report.resolve_rate:.2%}**",
         f"- pass@k: `{report.pass_at_k}`",
+        f"- tool_calls by tier: `{report.tool_calls_by_tier}`",
+        f"- max_hit_rate: **{report.max_hit_rate:.2%}**",
         "",
-        "| task | sample | resolve | pass_ratio | iterations | tokens_in | tokens_out | wall_s | status |",
-        "|---|---:|:---:|---:|---:|---:|---:|---:|---|",
+        "| task | sample | resolve | pass_ratio | iterations | max_hit | tool_calls | tokens_in | tokens_out | wall_s | status |",
+        "|---|---:|:---:|---:|---:|:---:|---|---:|---:|---:|---|",
     ]
     for it in report.items:
+        tc = it.get("tool_calls") or {}
+        tc_s = ",".join(f"{k}={v}" for k, v in sorted(tc.items())) if tc else ""
         lines.append(
             f"| {it.get('task_id')} | {it.get('sample')} | "
             f"{'✅' if it.get('resolve') else '❌'} | "
             f"{float(it.get('pass_ratio') or 0):.2f} | "
-            f"{it.get('iterations')} | {it.get('tokens_in')} | {it.get('tokens_out')} | "
+            f"{it.get('iterations')} | "
+            f"{'Y' if it.get('max_hit') else 'N'} | "
+            f"{tc_s} | {it.get('tokens_in')} | {it.get('tokens_out')} | "
             f"{float(it.get('wall_s') or 0):.1f} | {it.get('status')} |"
         )
     if report.notes:
@@ -128,21 +157,28 @@ def render_markdown(report: Report) -> str:
 
 def print_report_table(report: Report) -> None:
     table = Table(title=f"eval {report.eval_id} · suite={report.suite} · k={report.k}")
-    for col in ("task", "sample", "resolve", "pass_ratio", "iters", "wall_s", "status"):
+    for col in ("task", "sample", "resolve", "pass_ratio", "iters", "max_hit", "tools", "wall_s", "status"):
         table.add_column(col)
     for it in report.items:
         style = "green" if it.get("resolve") else "red"
+        tc = it.get("tool_calls") or {}
+        tc_s = ",".join(f"{k}:{v}" for k, v in sorted(tc.items())) if tc else ""
         table.add_row(
             str(it.get("task_id")),
             str(it.get("sample")),
             f"[{style}]{it.get('resolve')}[/{style}]",
             f"{float(it.get('pass_ratio') or 0):.2f}",
             str(it.get("iterations")),
+            "Y" if it.get("max_hit") else "N",
+            tc_s,
             f"{float(it.get('wall_s') or 0):.1f}",
             str(it.get("status")),
         )
     console.print(table)
-    console.print(f"resolve_rate={report.resolve_rate:.2%}  pass@k={report.pass_at_k}")
+    console.print(
+        f"resolve_rate={report.resolve_rate:.2%}  pass@k={report.pass_at_k}  "
+        f"tool_calls={report.tool_calls_by_tier}  max_hit_rate={report.max_hit_rate:.2%}"
+    )
 
 
 def compare_reports(a: dict[str, Any], b: dict[str, Any]) -> str:

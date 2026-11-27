@@ -26,11 +26,17 @@ def dispatch_tool(
     - 成功/失败/越权 → ``tool_result``（越权带 ``rejected=true``）
     """
     args = args or {}
+    tier = None
+    if tools is not None:
+        try:
+            tier = str(tools.get(name).tier)
+        except Exception:  # noqa: BLE001 — 未知工具时 tier 留空
+            tier = None
     if events is not None:
-        events.emit(
-            EventType.TOOL_CALL,
-            {"name": name, "args": args, "node": node},
-        )
+        payload: dict[str, Any] = {"name": name, "args": args, "node": node}
+        if tier is not None:
+            payload["tier"] = tier
+        events.emit(EventType.TOOL_CALL, payload)
 
     if tools is None:
         summary = "no registry"

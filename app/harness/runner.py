@@ -29,7 +29,13 @@ from app.agents.state import AgentState, TestRecord, initial_state
 from app.config import load_settings
 from app.db.models import RunRow
 from app.db.session import create_checkpointer, session_scope
-from app.events import EventStore, EventType, assert_seq_monotonic, load_events
+from app.events import (
+    EventStore,
+    EventType,
+    assert_seq_monotonic,
+    count_tool_calls_by_tier,
+    load_events,
+)
 from app.harness.loader import resolve_hidden_test_paths, suite_dir
 from app.harness.schema import RunMetrics, TaskDefinition
 from app.sandbox.workspace import prepare_workspace, run_command
@@ -248,7 +254,7 @@ def run_single_task(
             it = int(state.get("iteration") or 0)
             events.emit(
                 EventType.TOOL_CALL,
-                {"name": "run_tests", "args": {"path": "tests"}, "node": "agent"},
+                {"name": "run_tests", "args": {"path": "tests"}, "node": "agent", "tier": "X"},
             )
             r = run_command(
                 [sys.executable, "-m", "pytest", "-q", "tests"],
@@ -344,12 +350,16 @@ def run_single_task(
         if final.get("status") == "error":
             status = "error"
 
+        # 先落库再统计（含 hidden_scoring 前的 tool_call）
+        evs_so_far = load_events(session, rid)
+        tool_calls = count_tool_calls_by_tier(evs_so_far)
+
         metrics = RunMetrics(
             resolve=resolve,
             test_pass_ratio=ratio,
             iterations=iteration,
             max_hit=max_hit,
-            tool_calls={},
+            tool_calls=tool_calls,
             tokens_in=0,
             tokens_out=0,
             wall_s=wall,

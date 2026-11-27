@@ -118,3 +118,17 @@ def assert_seq_monotonic(events: list[Event]) -> None:
         raise ValueError(f"事件 seq 非单调: {seqs}")
     if len(seqs) != len(set(seqs)):
         raise ValueError(f"事件 seq 重复: {seqs}")
+
+
+def count_tool_calls_by_tier(events: list[Event]) -> dict[str, int]:
+    """按 tier 统计 tool_call 次数（含 rejected；无 tier 记入 unknown）。
+
+    优先读 payload.tier（tool_dispatch 写入）；缺失时无法回查注册表则记 unknown。
+    """
+    counts: dict[str, int] = {}
+    for e in events:
+        if e.type is not EventType.TOOL_CALL:
+            continue
+        tier = str(e.payload.get("tier") or "unknown")
+        counts[tier] = counts.get(tier, 0) + 1
+    return counts
