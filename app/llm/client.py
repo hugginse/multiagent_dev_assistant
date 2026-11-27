@@ -240,6 +240,8 @@ class LLMClient:
             "model": self.model,
             "messages": messages,
             "stream": stream,
+            # qwen3.5 思维链会吃满 num_predict 导致 content 为空；默认关闭 thinking
+            "think": False,
             "options": opts,
         }
         if tools:
