@@ -109,3 +109,55 @@ def search(
             h.content[:100].replace("\n", " "),
         )
     console.print(table)
+
+
+@app.command("show")
+def show_memory(memory_id: str = typer.Argument(..., help="memory id")) -> None:
+    """查看单条记忆全文。"""
+    from app.memory.long_term import LongTermMemory
+
+    mem = LongTermMemory()
+    row = mem.get(memory_id)
+    if row is None:
+        console.print(f"[red]记忆不存在: {memory_id}[/red]")
+        raise typer.Exit(1)
+    console.print(f"[bold]{row.id}[/bold] kind={row.kind} repo={row.repo_id}")
+    console.print(f"title: {row.title}")
+    if row.task_ref:
+        console.print(f"task_ref: {row.task_ref}")
+    console.print(f"updated: {row.updated_at}")
+    console.print("--- content ---")
+    console.print(row.content)
+
+
+@app.command("preview")
+def preview_injection(
+    query: str = typer.Argument(..., help="用任务 prompt 或关键词预览注入"),
+    repo: str = typer.Option("sample_repo", "--repo"),
+    k: int = typer.Option(5, "--k", "-k"),
+    min_score: float | None = typer.Option(None, "--min-score"),
+    no_episodes: bool = typer.Option(False, "--no-episodes", help="只注入 convention"),
+) -> None:
+    """预览 --memory on 时会注入的 prompt 片段（不跑 Agent）。"""
+    from app.memory.injection import inject_memory
+
+    r = inject_memory(
+        query,
+        repo_id=repo,
+        enabled=True,
+        top_k=k,
+        min_score=min_score,
+        include_episodes=not no_episodes,
+    )
+    if r.skipped_reason and not r.text:
+        console.print(f"[yellow]未注入:[/yellow] {r.skipped_reason}")
+        console.print(
+            f"hits: convention={len(r.convention_hits)} episode={len(r.episode_hits)}"
+        )
+        return
+    console.print(
+        f"[dim]convention={len(r.convention_hits)} episode={len(r.episode_hits)}[/dim]"
+    )
+    console.print("[bold]--- 注入预览 ---[/bold]")
+    console.print(r.text)
+    console.print("[bold]--- 结束 ---[/bold]")

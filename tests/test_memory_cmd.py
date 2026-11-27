@@ -100,3 +100,52 @@ def test_onboarding_dry_run(tmp_path: Path) -> None:
     assert r.exit_code in {0, 1, 2}
     if r.exit_code == 0:
         assert "done" in r.stdout or "conventions" in r.stdout
+
+
+def test_show_missing_id() -> None:
+    r = runner.invoke(app, ["memory", "show", "no_such_id"])
+    assert r.exit_code == 1
+    assert "不存在" in r.stdout
+
+
+def test_show_memory_full() -> None:
+    mem = LongTermMemory(embed=_Embed())  # type: ignore[arg-type]
+    mem.ensure_repo("sample_repo")
+    mid = mem.add(
+        repo_id="sample_repo",
+        kind="convention",
+        title="完整标题",
+        content="完整内容ABC",
+    )
+    r = runner.invoke(app, ["memory", "show", mid])
+    assert r.exit_code == 0
+    assert "完整标题" in r.stdout
+    assert "完整内容ABC" in r.stdout
+
+
+def test_preview_injection(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.memory.long_term as lt
+
+    monkeypatch.setattr(lt, "create_embed_client", lambda: _Embed())
+    mem = LongTermMemory(embed=_Embed())  # type: ignore[arg-type]
+    mem.ensure_repo("sample_repo")
+    mem.add(
+        repo_id="sample_repo",
+        kind="convention",
+        title="预览约定",
+        content="金额用分存储",
+    )
+    r = runner.invoke(
+        app,
+        ["memory", "preview", "金额 用分", "--repo", "sample_repo", "--min-score", "0"],
+    )
+    assert r.exit_code == 0, r.stdout
+    assert "注入预览" in r.stdout or "未注入" in r.stdout
+
+
+def test_preview_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.memory.long_term as lt
+
+    monkeypatch.setattr(lt, "create_embed_client", lambda: _Embed())
+    r = runner.invoke(app, ["memory", "preview", "xyz", "--repo", "empty_repo_xyz"])
+    assert r.exit_code == 0
