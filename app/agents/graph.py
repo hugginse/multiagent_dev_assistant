@@ -53,19 +53,23 @@ def build_graph(
 
     graph = StateGraph(AgentState)
 
+    from app.agents.memory_short import compress_state
+
     def _planner(s: AgentState) -> AgentState:
         out = planner_node(s, llm=llm, events=events, tools=tools, workspace=workspace)
         # 因 reject 回 planner 后标记：仅允许一次（路由决策在 after_reviewer）
         review = out.get("review") or {}
         if review.get("verdict") == "reject" and review.get("root_cause_plan"):
             out["_replanned"] = True
-        return out
+        return compress_state(out)
 
     def _explorer(s: AgentState) -> AgentState:
-        return explorer_node(s, llm=llm, events=events, tools=tools, workspace=workspace)
+        out = explorer_node(s, llm=llm, events=events, tools=tools, workspace=workspace)
+        return compress_state(out)
 
     def _coder(s: AgentState) -> AgentState:
-        return coder_node(s, llm=llm, events=events, tools=tools, workspace=workspace)
+        out = coder_node(s, llm=llm, events=events, tools=tools, workspace=workspace)
+        return compress_state(out)
 
     def _tester(s: AgentState) -> AgentState:
         out = tester_node(s, llm=llm, events=events, on_test=on_test)
@@ -73,14 +77,14 @@ def build_graph(
         # 触顶时在节点内写 status（条件边改 state 不生效）
         if should_mark_timeout(out):
             out["status"] = "timeout"
-        return out
+        return compress_state(out)
 
     def _reviewer(s: AgentState) -> AgentState:
         out = reviewer_node(s, llm=llm, events=events)
         # 注意：_replanned 不在此预标——否则 after_reviewer 永远不会路由到 planner
         if should_mark_timeout(out):
             out["status"] = "timeout"
-        return out
+        return compress_state(out)
 
     graph.add_node("planner", _planner)
     graph.add_node("explorer", _explorer)
