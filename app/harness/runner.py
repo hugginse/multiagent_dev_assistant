@@ -278,7 +278,13 @@ def run_single_task(
         on_test = on_node_test or _default_on_test
 
         cp = create_checkpointer()
-        graph = build_graph(llm=llm, events=events, on_test=on_test, checkpointer=cp)
+        graph = build_graph(
+            llm=llm,
+            events=events,
+            on_test=on_test,
+            checkpointer=cp,
+            five_node=True,
+        )
         state = initial_state(task, memory_context=memory_context)
         started = time.monotonic()
         try:

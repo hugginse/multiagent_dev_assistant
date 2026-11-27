@@ -87,12 +87,14 @@ def test_agent_node_timeout_when_maxed(task: TaskDefinition) -> None:
 
 def test_graph_structure() -> None:
     summary = graph_structure_summary()
-    assert summary["nodes"] == ["agent"]
-    assert "loop" in summary
+    # M2 默认五节点
+    assert summary["nodes"] == ["planner", "explorer", "coder", "tester", "reviewer"]
+    assert summary["entry"] == "planner"
+    assert any("tester" in e for e in summary["edges"])
 
 
 def test_graph_runs_with_stub_llm(task: TaskDefinition) -> None:
-    graph = build_graph(llm=None, on_test=None, checkpointer=None)
+    graph = build_graph(llm=None, on_test=None, checkpointer=None, five_node=False)
     state = initial_state(task)
     final = graph.invoke(state)
     # stub 测试 returncode=0 → success
@@ -106,7 +108,7 @@ def test_graph_bounded_loop_hits_max(task: TaskDefinition) -> None:
     def always_fail(_s: AgentState) -> TR:
         return TR(iteration=int(_s.get("iteration") or 0), passed=0, failed=1, returncode=1)
 
-    graph = build_graph(on_test=always_fail, checkpointer=None)
+    graph = build_graph(on_test=always_fail, checkpointer=None, five_node=False)
     state = initial_state(task)  # max_iterations=3
     final = graph.invoke(state)
     assert final["status"] == "timeout"

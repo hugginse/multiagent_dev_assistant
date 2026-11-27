@@ -254,12 +254,15 @@ def test_event_order_with_llm_mock() -> None:
     assert EventType.LLM_DELTA in types
     assert EventType.TEST_RESULT in types
 
-    # 相对顺序：node_enter 在 llm_delta 前，llm_delta 在 test_result 前
-    i_enter = types.index(EventType.NODE_ENTER)
-    i_delta = types.index(EventType.LLM_DELTA)
-    i_test = types.index(EventType.TEST_RESULT)
-    i_exit = types.index(EventType.NODE_EXIT)
-    assert i_enter < i_delta < i_test < i_exit
+    # 五节点下：首个 node_enter 在首个 llm_delta 前；llm_delta 在 test_result 前；
+    # 最后一个 node_exit 在 run_finished 前
+    i_first_enter = types.index(EventType.NODE_ENTER)
+    i_first_delta = types.index(EventType.LLM_DELTA)
+    i_first_test = types.index(EventType.TEST_RESULT)
+    i_last_exit = len(types) - 1 - types[::-1].index(EventType.NODE_EXIT)
+    assert i_first_enter < i_first_delta
+    assert i_first_delta < i_first_test
+    assert i_last_exit < len(types) - 1  # run_finished 之前有 node_exit
 
     # seq 单调 + 落库一致
     assert_seq_monotonic(seen)
@@ -295,7 +298,12 @@ def test_llm_mock_streams_multiple_deltas() -> None:
 def test_graph_condition_success_uses_mock_llm() -> None:
     task = TaskDefinition(id="TX", title="t", prompt="p", max_iterations=2)
     mock = make_mock_llm()
-    graph = build_graph(llm=mock, on_test=lambda s: TestRecord(iteration=0, passed=1, failed=0, returncode=0), checkpointer=None)
+    graph = build_graph(
+        llm=mock,
+        on_test=lambda s: TestRecord(iteration=0, passed=1, failed=0, returncode=0),
+        checkpointer=None,
+        five_node=False,
+    )
     final = graph.invoke(initial_state(task))
     assert final["status"] == "success"
     assert mock.calls == ["TX"]
@@ -309,7 +317,7 @@ def test_graph_condition_timeout_loop_mock() -> None:
     def always_fail(s: AgentState) -> TestRecord:
         return TestRecord(iteration=int(s.get("iteration") or 0), passed=0, failed=1, returncode=1)
 
-    graph = build_graph(llm=mock, on_test=always_fail, checkpointer=None)
+    graph = build_graph(llm=mock, on_test=always_fail, checkpointer=None, five_node=False)
     final = graph.invoke(initial_state(task))
     assert final["status"] == "timeout"
     assert final["iteration"] == 3
