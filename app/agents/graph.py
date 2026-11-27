@@ -18,7 +18,7 @@ from langgraph.graph import END, START, StateGraph
 from app.agents.loop import after_reviewer as _after_reviewer
 from app.agents.loop import after_tester as _after_tester
 from app.agents.loop import hit_max as _hit_max
-from app.agents.loop import should_mark_timeout, should_replan
+from app.agents.loop import should_mark_timeout
 
 # 兼容 M1 导入
 from app.agents.nodes.agent_node import LLMFn, agent_node  # noqa: F401
@@ -54,7 +54,12 @@ def build_graph(
     graph = StateGraph(AgentState)
 
     def _planner(s: AgentState) -> AgentState:
-        return planner_node(s, llm=llm, events=events, tools=tools, workspace=workspace)
+        out = planner_node(s, llm=llm, events=events, tools=tools, workspace=workspace)
+        # 因 reject 回 planner 后标记：仅允许一次（路由决策在 after_reviewer）
+        review = out.get("review") or {}
+        if review.get("verdict") == "reject" and review.get("root_cause_plan"):
+            out["_replanned"] = True
+        return out
 
     def _explorer(s: AgentState) -> AgentState:
         return explorer_node(s, llm=llm, events=events, tools=tools, workspace=workspace)
@@ -72,9 +77,7 @@ def build_graph(
 
     def _reviewer(s: AgentState) -> AgentState:
         out = reviewer_node(s, llm=llm, events=events)
-        # 连续 reject 回 planner 仅一次：在节点内标记
-        if should_replan(out):
-            out["_replanned"] = True
+        # 注意：_replanned 不在此预标——否则 after_reviewer 永远不会路由到 planner
         if should_mark_timeout(out):
             out["status"] = "timeout"
         return out
