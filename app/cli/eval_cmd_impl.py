@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from rich.console import Console
-from rich.progress import BarColumn, Progress, TextProgressColumn, TimeElapsedColumn
+from rich.progress import BarColumn, Progress, TaskProgressColumn, TimeElapsedColumn
 
 console = Console()
 
@@ -46,9 +46,8 @@ def execute_eval(
     total = len(tasks) * k
 
     progress = Progress(
-        TextProgressColumn(),
+        TaskProgressColumn(),
         BarColumn(),
-        TextProgressColumn("[progress.percentage]{task.percentage:>3.0f}%"),
         TimeElapsedColumn(),
         console=console,
     )

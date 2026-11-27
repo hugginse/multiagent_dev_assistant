@@ -147,7 +147,7 @@ def score_hidden_tests(
 
 
 def _parse_pytest_counts(output: str) -> tuple[int, int]:
-    """从 pytest 输出解析 passed/failed。"""
+    """从 pytest 输出解析 passed/failed；-q 点号模式用点数兜底。"""
     import re
 
     passed = failed = 0
@@ -157,6 +157,15 @@ def _parse_pytest_counts(output: str) -> tuple[int, int]:
     m = re.search(r"(\d+)\s+failed", output)
     if m:
         failed = int(m.group(1))
+    if passed == 0 and failed == 0:
+        # -q 纯点号：. = passed, F = failed
+        # 只统计进度行中的字符
+        for line in output.splitlines():
+            stripped = line.strip()
+            if stripped and set(stripped) <= set(".FEsx") and len(stripped) >= 1:
+                failed += stripped.count("F") + stripped.count("E")
+                passed += stripped.count(".")
+                break
     return passed, failed
 
 
