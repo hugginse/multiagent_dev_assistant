@@ -77,9 +77,13 @@ def test_memory_search_hits(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "ValidationError" in r.stdout or "错误处理" in r.stdout
 
 
-def test_memory_search_empty_repo() -> None:
+def test_memory_search_empty_repo(monkeypatch: pytest.MonkeyPatch) -> None:
+    # CI 无 Ollama：必须 mock embedding，否则查询向量化失败 exit 1
+    import app.memory.long_term as lt
+
+    monkeypatch.setattr(lt, "create_embed_client", lambda: _Embed())
     r = runner.invoke(app, ["memory", "search", "xyz", "--repo", "empty_repo"])
-    assert r.exit_code == 0
+    assert r.exit_code == 0, r.stdout
     assert "无命中" in r.stdout
 
 

@@ -39,10 +39,13 @@ def execute_eval(
     try:
         if adapter == "local":
             tasks = load_tasks(suite)
+            hidden_suite = suite
         else:
             ad = get_adapter(adapter, path=data_path) if data_path else get_adapter(adapter)
             tasks = ad.load_tasks()
-            console.print(f"[dim]adapter={adapter} tasks={len(tasks)}[/dim]")
+            # 隐藏测试目录与 adapter 对齐（swe_bench → suites/swe_bench/hidden_tests）
+            hidden_suite = "swe_bench" if adapter in {"swe_bench", "swe", "swebench"} else suite
+            console.print(f"[dim]adapter={adapter} tasks={len(tasks)} hidden_suite={hidden_suite}[/dim]")
     except (SuiteError, ValueError, FileNotFoundError) as e:
         console.print(f"[red]任务加载失败:[/red] {e}")
         return 2, None
@@ -110,7 +113,7 @@ def execute_eval(
                     llm_fn = make_streaming_llm(client, emit_delta=_emit)
                     outcome = run_single_task(
                         task,
-                        suite=suite,
+                        suite=hidden_suite,
                         provider=prov,
                         memory_on=memory_on,
                         llm=llm_fn,

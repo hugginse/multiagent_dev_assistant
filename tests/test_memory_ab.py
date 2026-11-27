@@ -44,29 +44,60 @@ def test_memory_ab_rejects_bad_suite() -> None:
     assert code in {1, 2}
 
 
-def test_ab_flag_registered() -> None:
+def test_ab_flag_registered(plain) -> None:
     from typer.testing import CliRunner
 
     from app.cli.main import app
 
     r = CliRunner().invoke(app, ["eval", "--help"])
     assert r.exit_code == 0
-    assert "--ab" in r.stdout
+    assert "--ab" in plain(r.stdout)
 
 
-def test_runner_emits_episode_when_memory_on(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """memory_on 时 run 终态尝试 episode 沉淀（不抛错）。"""
+def test_runner_emits_episode_when_memory_on(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """memory_on 时应产生 memory_injected（注入或 episode）。
+
+    CI 无 Ollama：mock embedding，预置 convention，保证注入与沉淀可走通。
+    """
     from app.agents.state import AgentState, TestRecord
     from app.db.session import session_scope
     from app.events import EventType, load_events
     from app.harness.loader import load_task
     from app.harness.runner import run_single_task
+    from app.memory.long_term import LongTermMemory
 
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'ep_run.db'}")
     monkeypatch.setenv("WORKSPACE_ROOT", str(tmp_path / "ws"))
     monkeypatch.setenv("CHROMA_DIR", str(tmp_path / "chroma"))
     reset_engine_for_tests()
     init_db()
+
+    class _Embed:
+        def embed_one(self, text: str) -> list[float]:
+            v = [0.0] * 24
+            for tok in text.lower().split():
+                v[hash(tok) % 24] += 1.0
+            n = sum(x * x for x in v) ** 0.5 or 1.0
+            return [x / n for x in v]
+
+        def embed(self, texts: list[str]) -> list[list[float]]:
+            return [self.embed_one(t) for t in texts]
+
+    import app.memory.long_term as lt
+
+    monkeypatch.setattr(lt, "create_embed_client", lambda: _Embed())
+
+    # 预置约定，保证注入非空 → MEMORY_INJECTED
+    mem = LongTermMemory(embed=_Embed())  # type: ignore[arg-type]
+    mem.ensure_repo("sample_repo")
+    mem.add(
+        repo_id="sample_repo",
+        kind="convention",
+        title="折扣码大小写",
+        content="discount_amount 需对 save10 等小写码大小写不敏感",
+    )
 
     task = load_task("smoke", "T001")
 
@@ -82,9 +113,10 @@ def test_runner_emits_episode_when_memory_on(tmp_path: Path, monkeypatch: pytest
     )
     with session_scope() as s:
         evs = load_events(s, out.run_id)
-    # memory_on → 至少有 MEMORY_INJECTED（episode 或 search）
     mem_events = [e for e in evs if e.type is EventType.MEMORY_INJECTED]
-    assert mem_events, "memory_on 应产生 memory_injected 事件"
-    # episode 沉淀（可能因 chroma/embed 失败仅 error，但正常路径有 phase=episode）
+    assert mem_events, (
+        "memory_on 应产生 memory_injected 事件; types="
+        + str([e.type.value for e in evs[:20]])
+    )
     phases = {e.payload.get("phase") for e in mem_events}
     assert "episode" in phases or any(e.payload.get("chars") for e in mem_events)

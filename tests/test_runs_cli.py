@@ -133,7 +133,7 @@ def test_show_events_with_events() -> None:
     assert "llm_delta" in r.stdout
 
 
-def test_show_events_limit() -> None:
+def test_show_events_limit(plain) -> None:
     from app.db.models import RunEventRow
 
     _seed_run()
@@ -149,8 +149,9 @@ def test_show_events_limit() -> None:
             )
     r = runner.invoke(app, ["runs", "show", "run_test_1", "--events", "--limit", "2"])
     assert r.exit_code == 0
-    assert "显示前 2" in r.stdout
-    assert "其余" in r.stdout
+    out = plain(r.stdout)
+    assert "显示前 2" in out
+    assert "其余" in out
 
 
 def test_show_diff_missing() -> None:

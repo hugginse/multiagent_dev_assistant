@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        # 注意：setup-uv 无 v10 浮动 tag，必须用完整版本或 commit SHA
+        uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: |
+          uv python install 3.12
+          uv python find 3.12
+
+      - name: Sync dependencies (frozen lockfile)
+        run: uv sync --frozen
+
+      - name: Versions
+        run: |
+          uv run python --version
+          uv run ruff --version
+          uv run pytest --version
+
+      - name: Ruff check
+        run: uv run ruff check .
+
+      - name: Pytest
+        # 不在 CI 跑真实 LLM harness；失败时把 FAILED 行打成 annotation 便于 API/页面查看
+        shell: bash
+        run: |
+          set -uo pipefail
+          export PYTHONUNBUFFERED=1
+          rc=0
+          uv run pytest -v --tb=short 2>&1 | tee pytest-output.txt || rc=$?
+          if [ "$rc" -ne 0 ]; then
+            echo "::group::pytest failed (rc=$rc)"
+            # 单行 annotation，避免多行截断
+            grep -E "^(FAILED|ERROR)|Error:|assert " pytest-output.txt | head -40 | while IFS= read -r line; do
+              # 去掉可能的 %0A
+              clean=$(printf '%s' "$line" | tr '\n' ' ')
+              echo "::error::$clean"
+            done
+            echo "::error::pytest-exit-code=$rc"
+            tail -30 pytest-output.txt | while IFS= read -r line; do
+              echo "::error::$(printf '%s' "$line" | tr '\n' ' ')"
+            done
+            echo "::endgroup::"
+          fi
+          exit $rc
+        env:
+          DATABASE_URL: sqlite:///./.ci-test.db
+          WORKSPACE_ROOT: ./.ci-workspaces
+          CHROMA_DIR: ./.ci-chroma
+          NO_COLOR: "1"
+          FORCE_COLOR: "0"
+
+      - name: Show failures
+        if: failure()
+        shell: bash
+        run: |
+          echo "::group::pytest failures"
+          grep -E "FAILED|ERROR|Error" pytest-output.txt || true
+          echo "::endgroup::"
+          # 写入 Step Summary，便于在 Actions 页面直接看
+          {
+            echo "### pytest failure"
+            echo '```'
+            grep -E "FAILED|ERROR|assert" pytest-output.txt | tail -80 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload pytest log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-output
+          path: pytest-output.txt
+          if-no-files-found: ignore
+
+      - name: Cleanup CI artifacts
+        if: always()
+        run: rm -rf .ci-test.db .ci-workspaces .ci-chroma pytest-output.txt
