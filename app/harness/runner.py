@@ -240,6 +240,22 @@ def run_single_task(
                 "memory_on": memory_on,
             },
         )
+        # 记忆注入：memory_on 且未显式传 context 时按任务 prompt 检索
+        if memory_on and not memory_context:
+            try:
+                from app.memory.injection import build_memory_context
+
+                memory_context, _inj = build_memory_context(
+                    task.prompt,
+                    repo_id=task.repo,
+                    enabled=True,
+                )
+            except Exception as e:  # noqa: BLE001 — 注入失败不阻断
+                memory_context = ""
+                events.emit(
+                    EventType.ERROR,
+                    {"message": f"memory inject failed: {e}", "phase": "memory"},
+                )
         if memory_on and memory_context:
             events.emit(
                 EventType.MEMORY_INJECTED,
