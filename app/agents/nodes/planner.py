@@ -62,7 +62,7 @@ def planner_node(
             events,
             node="planner",
             name="memory_search",
-            args={"q": task.title},
+            args={"query": task.title},
         )
 
     if llm is not None:
