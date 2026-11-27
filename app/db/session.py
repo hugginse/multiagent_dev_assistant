@@ -15,7 +15,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.config import get_settings
+from app.config import load_settings, reset_settings_cache
 from app.db.models import Base
 
 _engine: Engine | None = None
@@ -48,7 +48,7 @@ def _enable_sqlite_fks(engine: Engine) -> None:
 def get_engine(url: str | None = None, *, create_dirs: bool = True) -> Engine:
     """进程内共享引擎。"""
     global _engine, _SessionFactory
-    resolved = url or get_settings().database_url
+    resolved = url or load_settings().database_url
     if _engine is not None and url is None:
         return _engine
 
@@ -103,12 +103,13 @@ def session_scope(*, url: str | None = None) -> Iterator[Session]:
 
 
 def reset_engine_for_tests() -> None:
-    """测试隔离：释放引擎。"""
+    """测试隔离：释放引擎并清空配置缓存（保证 monkeypatch env 生效）。"""
     global _engine, _SessionFactory
     if _engine is not None:
         _engine.dispose()
     _engine = None
     _SessionFactory = None
+    reset_settings_cache()
 
 
 def create_checkpointer(*, url: str | None = None):
@@ -119,7 +120,7 @@ def create_checkpointer(*, url: str | None = None):
     # SqliteSaver 需要 sqlite3 connection；从 URL 再开一条独立连接更稳妥
     import sqlite3
 
-    resolved = url or get_settings().database_url
+    resolved = url or load_settings().database_url
     db_path = _sqlite_path_from_url(resolved)
     if db_path is None:
         # 内存库：共享 engine 的 connection
