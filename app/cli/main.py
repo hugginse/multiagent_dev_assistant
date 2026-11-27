@@ -43,6 +43,15 @@ def root(
     ),
 ) -> None:
     """devassist — 多 Agent 仓库级研发助手."""
+    if version:
+        return
+    # 启动清理：stale workspaces + 僵尸 running runs（幂等，失败不阻断）
+    try:
+        from app.cli.lifecycle import startup_cleanup
+
+        startup_cleanup(quiet=True)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def main() -> None:
