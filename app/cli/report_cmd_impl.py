@@ -6,7 +6,13 @@ import json
 from pathlib import Path
 
 from rich.console import Console
-from rich.table import Table
+
+from app.harness.report import Report as _Report  # noqa: F401 — re-export aid
+from app.harness.report import (
+    compare_reports,
+    print_compare_console,
+    print_report_table,
+)
 
 console = Console()
 
@@ -17,7 +23,6 @@ def _load_report(eval_id: str | None, path: Path | None) -> dict:
     if eval_id:
         p = Path("data/reports") / f"{eval_id}.json"
         if not p.exists():
-            # 允许直接传 id 对应完整文件名
             alt = Path("data/reports") / eval_id
             if alt.exists():
                 p = alt
@@ -29,30 +34,35 @@ def _load_report(eval_id: str | None, path: Path | None) -> dict:
 
 def show_report(*, eval_id: str | None, path: Path | None) -> int:
     try:
-        report = _load_report(eval_id, path)
+        data = _load_report(eval_id, path)
     except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
         console.print(f"[red]{e}[/red]")
         return 2
 
-    table = Table(title=f"report {report.get('eval_id', '?')}")
-    for col in ("task_id", "sample", "resolve", "pass_ratio", "iterations", "wall_s", "status"):
-        table.add_column(col)
-    for it in report.get("items", []):
-        table.add_row(
-            str(it.get("task_id")),
-            str(it.get("sample")),
-            str(it.get("resolve")),
-            f"{float(it.get('pass_ratio') or 0):.2f}",
-            str(it.get("iterations")),
-            f"{float(it.get('wall_s') or 0):.1f}",
-            str(it.get("status")),
-        )
-    console.print(table)
-    console.print(f"resolve_rate={report.get('resolve_rate')} pass@k={report.get('pass_at_k')}")
+    # 组装为 Report 结构打印
+    from app.harness.report import Report
+
+    rep = Report(
+        eval_id=data.get("eval_id", "?"),
+        suite=data.get("suite", "?"),
+        k=int(data.get("k") or 1),
+        provider=data.get("provider", ""),
+        model=data.get("model", ""),
+        memory_on=bool(data.get("memory_on")),
+        items=data.get("items", []),
+        pass_at_k=data.get("pass_at_k") or {},
+        resolve_rate=float(data.get("resolve_rate") or 0),
+        created_at=data.get("created_at", ""),
+        notes=data.get("notes", ""),
+    )
+    print_report_table(rep)
+    md_path = Path("data/reports") / f"{rep.eval_id}.md"
+    if md_path.exists():
+        console.print(f"markdown: [bold]{md_path}[/bold]")
     return 0
 
 
-def compare_reports(a_path: Path, b_path: Path) -> int:
+def compare_reports_paths(a_path: Path, b_path: Path) -> int:
     try:
         a = json.loads(a_path.read_text(encoding="utf-8"))
         b = json.loads(b_path.read_text(encoding="utf-8"))
@@ -60,48 +70,11 @@ def compare_reports(a_path: Path, b_path: Path) -> int:
         console.print(f"[red]读取失败:[/red] {e}")
         return 2
 
-    def key(item: dict) -> tuple[str, int]:
-        return (str(item.get("task_id")), int(item.get("sample") or 0))
+    print_compare_console(a, b)
 
-    amap = {key(i): i for i in a.get("items", [])}
-    bmap = {key(i): i for i in b.get("items", [])}
-    keys = sorted(set(amap) | set(bmap))
-
-    table = Table(title=f"compare  A={a.get('eval_id', a_path.name)}  B={b.get('eval_id', b_path.name)}")
-    table.add_column("task")
-    table.add_column("sample")
-    table.add_column("A resolve")
-    table.add_column("B resolve")
-    table.add_column("Δ resolve")
-    table.add_column("A ratio")
-    table.add_column("B ratio")
-    table.add_column("Δ ratio")
-    table.add_column("Δ wall_s")
-
-    for k in keys:
-        ai, bi = amap.get(k), bmap.get(k)
-        ar = bool(ai.get("resolve")) if ai else False
-        br = bool(bi.get("resolve")) if bi else False
-        apr = float(ai.get("pass_ratio") or 0) if ai else 0.0
-        bpr = float(bi.get("pass_ratio") or 0) if bi else 0.0
-        aw = float(ai.get("wall_s") or 0) if ai else 0.0
-        bw = float(bi.get("wall_s") or 0) if bi else 0.0
-        dr = int(br) - int(ar)
-        dstyle = "green" if dr > 0 else ("red" if dr < 0 else "dim")
-        table.add_row(
-            k[0],
-            str(k[1]),
-            str(ar),
-            str(br),
-            f"[{dstyle}]{dr:+d}[/{dstyle}]",
-            f"{apr:.2f}",
-            f"{bpr:.2f}",
-            f"{bpr - apr:+.2f}",
-            f"{bw - aw:+.1f}",
-        )
-
-    console.print(table)
-    ra = float(a.get("resolve_rate") or 0)
-    rb = float(b.get("resolve_rate") or 0)
-    console.print(f"resolve_rate  A={ra:.2%}  B={rb:.2%}  Δ={rb - ra:+.2%}")
+    # 同时落一份对比 md，便于贴报告
+    out = Path("data/reports") / f"compare_{a.get('eval_id', 'A')}_vs_{b.get('eval_id', 'B')}.md"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(compare_reports(a, b), encoding="utf-8")
+    console.print(f"对比报告: [bold]{out}[/bold]")
     return 0

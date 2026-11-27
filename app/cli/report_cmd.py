@@ -1,4 +1,4 @@
-"""report / compare 子命令（M1 骨架）。"""
+"""report / compare 子命令。"""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ def report(
     eval_id: str | None = typer.Option(None, "--eval", "-e", help="eval id"),
     path: Path | None = typer.Option(None, "--path", help="报告 JSON 路径"),
 ) -> None:
-    """查看单份评测报告。"""
+    """查看单份评测报告（rich 表）。"""
     if ctx.invoked_subcommand is not None:
         return
     from app.cli.report_cmd_impl import show_report
@@ -31,13 +31,13 @@ def compare(
     a: Path | None = typer.Argument(None, help="报告 A JSON"),
     b: Path | None = typer.Argument(None, help="报告 B JSON"),
 ) -> None:
-    """对比两份评测报告（A/B delta）。"""
+    """对比两份评测报告（A/B delta 表）。"""
     if ctx.invoked_subcommand is not None:
         return
     if a is None or b is None:
         typer.echo("用法: devassist compare <a.json> <b.json>", err=True)
         raise typer.Exit(2)
-    from app.cli.report_cmd_impl import compare_reports
+    from app.cli.report_cmd_impl import compare_reports_paths
 
-    code = compare_reports(a, b)
+    code = compare_reports_paths(a, b)
     raise typer.Exit(code)
