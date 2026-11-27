@@ -1,0 +1,17 @@
+id: T002
+title: 实现订单最大条目数限制
+repo: sample_repo
+difficulty: medium
+prompt: |
+  需求：单笔订单最多包含 MAX_ITEMS_PER_ORDER 个不同 SKU 的条目，
+  以及单个条目的数量不得超过 MAX_QUANTITY_PER_ITEM。
+
+  请在 orderlib 中实现该校验（常量已在 constants.py）：
+  - 超出限制时抛 ValidationError
+  - 校验发生在库存扣减之前，失败时不得泄漏库存
+  - 更新或补充单测，保证 `python -m pytest -q` 全绿
+hidden_tests:
+  - test_order_limits_hidden.py
+max_iterations: 8
+timeout_s: 300
+tags: [feature, validation]

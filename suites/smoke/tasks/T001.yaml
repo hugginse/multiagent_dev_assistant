@@ -1,0 +1,16 @@
+id: T001
+title: 修复折扣码大小写与未知码校验
+repo: sample_repo
+difficulty: easy
+prompt: |
+  orderlib 的折扣码处理有问题：
+  1. 用户输入小写折扣码（如 "save10"）时应当与大写等价，但当前行为不稳定。
+  2. 未知折扣码必须抛 ValidationError，且不能出现除 0 或负数折扣。
+
+  请阅读 pricing.py 与相关测试，修复 discount_amount / grand_total 的行为，
+  保持现有公共 API 不变。修改后运行 `python -m pytest -q` 确认仓库测试仍通过。
+hidden_tests:
+  - test_discount_hidden.py
+max_iterations: 8
+timeout_s: 300
+tags: [bugfix, pricing]

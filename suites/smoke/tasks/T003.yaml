@@ -1,0 +1,17 @@
+id: T003
+title: 重构运费计算支持多档费率
+repo: sample_repo
+difficulty: hard
+prompt: |
+  当前 calculate_shipping 只有「满额包邮 / 固定运费 / express 加倍」三档。
+  请重构为可扩展的多档费率结构：
+  - 档位数据结构化（阈值 + 费率），便于后续配置化
+  - 满额包邮、基础运费、express 加收语义保持不变（兼容现有测试）
+  - 新增：订单总重量维度暂不实现，但接口应预留 express 参数以外的扩展点
+
+  运行 `python -m pytest -q` 保证行为兼容、基线全绿。
+hidden_tests:
+  - test_shipping_tiers_hidden.py
+max_iterations: 8
+timeout_s: 300
+tags: [refactor, pricing]
