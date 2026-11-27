@@ -19,10 +19,11 @@ def execute_eval(
     provider: str | None,
     memory: str,
     limit: int | None,
-) -> int:
+) -> tuple[int, str | None]:
+    """返回 (exit_code, report_json_path|None)。"""
     if memory not in {"on", "off"}:
         console.print("[red]--memory 必须是 on 或 off[/red]")
-        return 2
+        return 2, None
     memory_on = memory == "on"
 
     from app.config import load_settings
@@ -36,7 +37,7 @@ def execute_eval(
         tasks = load_tasks(suite)
     except SuiteError as e:
         console.print(f"[red]套件加载失败:[/red] {e}")
-        return 2
+        return 2, None
     if limit is not None:
         tasks = tasks[:limit]
 
@@ -197,4 +198,42 @@ def execute_eval(
     except Exception as e:  # noqa: BLE001
         console.print(f"[yellow]警告: eval 落库失败 {e}[/yellow]")
 
-    return 1 if any_fail else 0
+    return (1 if any_fail else 0), str(jp)
+
+
+def execute_memory_ab(
+    *,
+    suite: str,
+    k: int,
+    provider: str | None,
+    limit: int | None,
+) -> int:
+    """记忆 A/B：同套件 memory on → off 双跑，自动 compare。
+
+    返回进程退出码（双跑任一配置失败任务存在则 1；配置错误 2）。
+    """
+    console.print("[bold]记忆 A/B[/bold]：先 --memory on，再 --memory off，最后 compare")
+
+    code_on, path_on = execute_eval(
+        suite=suite, k=k, provider=provider, memory="on", limit=limit
+    )
+    if path_on is None:
+        return code_on if code_on != 0 else 2
+    console.print(f"[green]memory ON[/green] 报告: {path_on}")
+
+    code_off, path_off = execute_eval(
+        suite=suite, k=k, provider=provider, memory="off", limit=limit
+    )
+    if path_off is None:
+        return code_off if code_off != 0 else 2
+    console.print(f"[yellow]memory OFF[/yellow] 报告: {path_off}")
+
+    from app.cli.report_cmd_impl import compare_reports_paths
+
+    console.print("\n[bold]A/B 对比（ON vs OFF）[/bold]")
+    cmp_code = compare_reports_paths(Path(path_on), Path(path_off))
+    # 双跑均无失败任务才算完全成功
+    if cmp_code != 0:
+        return cmp_code
+    return 0 if code_on == 0 and code_off == 0 else 1
+

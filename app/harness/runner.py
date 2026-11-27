@@ -396,6 +396,36 @@ def run_single_task(
         evs = load_events(session, rid)
         assert_seq_monotonic(evs)
 
+        # 终态 episode 沉淀（memory_on 才写；失败不阻断）
+        if memory_on:
+            try:
+                from app.memory.episodes import save_episode
+
+                ep = save_episode(
+                    repo_id=task.repo,
+                    task_id=task.id,
+                    task_title=task.title,
+                    prompt=task.prompt,
+                    resolve=metrics.resolve,
+                    iterations=metrics.iterations,
+                    error=metrics.error,
+                    memory_on=True,
+                )
+                if ep.status == "saved" and ep.memory_id:
+                    events.emit(
+                        EventType.MEMORY_INJECTED,
+                        {
+                            "phase": "episode",
+                            "memory_id": ep.memory_id,
+                            "title": ep.title,
+                        },
+                    )
+            except Exception as e:  # noqa: BLE001
+                events.emit(
+                    EventType.ERROR,
+                    {"message": f"episode save failed: {e}", "phase": "episode"},
+                )
+
         return RunOutcome(
             run_id=rid,
             task_id=task.id,
