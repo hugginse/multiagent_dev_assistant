@@ -2,7 +2,7 @@
 
 ## 项目定位
 
-仓库级智能研发助手（**多 Agent 协同 + 双层记忆 + 工具体系 + 评测 harness**），个人求职作品，交付物为 **GitHub 公开仓库 `multiagent_dev_assistant`**。
+仓库级智能研发助手（**多 Agent 协同 + 双层记忆 + 工具体系 + 评测 harness**），交付物为 **GitHub 公开仓库 `multiagent_dev_assistant`**。
 
 系统能力：任务套件 → LangGraph 五节点图（planner / explorer / coder / tester / reviewer，有界循环）→ 沙箱真实执行测试 → diff + 量化报告；短期记忆 = 图内 AgentState 黑板，长期记忆 = 仓库约定 + 历史任务（检索注入、可开关 A/B）；harness 对任务集批量评测，产出 pass@k / 指标对比报告。**交互形态为 CLI**（typer + rich，console script `devassist`）；静态页面挂路由**后续再定**，M1–M4 不做 Web。
 
@@ -20,7 +20,7 @@
 - 环境管理**只用 uv**：`.python-version` 钉 3.12，`uv sync` 建环境，日常一律 `uv run ...`（如 `uv run pytest`、`uv run devassist eval --suite smoke`）
 - **禁止**：`python3`（本机是损坏的商店别名）、裸 `python`（3.14，依赖无 wheel）、conda 环境
 - 依赖增改后必须 `uv sync` 并**提交 `uv.lock`**；`.venv/` 不提交
-- 主机 **9950X + RTX 5060 Ti 16GB**；Ollama 默认模型 **`qwen3.5:9b`**（Q4 约 6.6GB，显存留足 KV cache 余量），Embedding **`qwen3-embedding:4b`**；`OLLAMA_NUM_CTX=16384`（防 KV cache 挤爆显存，OOM 时下调）
+- 主机 **9950X + RTX 5060 Ti 16GB**；Ollama 默认模型 **`qwen3.5:9b`**（Q4 约 6.6GB），Embedding **`qwen3-embedding:4b`**；`OLLAMA_NUM_CTX=65536`（本机实测 64k 稳定；OOM 时下调）
 - Docker 已装但本项目 **M1–M4 不引入 Docker 沙箱**（进程级 workspace jail 即可）
 - 所有 Gate 命令均为 Git Bash 形式（见 plan.md 各节）
 

@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     llm_provider: str = "ollama"
     ollama_host: str = "http://127.0.0.1:11434"
     local_model: str = "qwen3.5:9b"
-    ollama_num_ctx: int = Field(default=16384, ge=1024, le=262144)
+    ollama_num_ctx: int = Field(default=65536, ge=1024, le=262144)  # 本机 64k 稳定
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = ""

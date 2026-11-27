@@ -385,7 +385,7 @@ FastAPI + SSE + 静态 hash 路由页：只读 `run_events` 与 REST 包装，�
 | `LLM_PROVIDER` | `ollama` | `ollama \| openai \| anthropic` |
 | `OLLAMA_HOST` | `http://127.0.0.1:11434` | |
 | `LOCAL_MODEL` | `qwen3.5:9b` | 本地默认，**不得降级** |
-| `OLLAMA_NUM_CTX` | `16384` | 16GB 显存上限保护；OOM 时下调 |
+| `OLLAMA_NUM_CTX` | `65536` | 本机 qwen3.5:9b 可稳定跑 64k；OOM 时下调 |
 | `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` | 空 | 缺 key 显式失败 |
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | 空 | 同上 |
 | `EMBED_PROVIDER` | `ollama` | `ollama \| openai` |
