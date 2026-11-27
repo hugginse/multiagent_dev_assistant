@@ -1,0 +1,36 @@
+{
+  "version": "swe_bench_lite_local_subset_v1",
+  "note": "演示子集：字段兼容 SWE-bench Lite（instance_id/problem_statement/repo）。执行口径为本地沙箱，非官方 Docker 分数。",
+  "instances": [
+    {
+      "instance_id": "py-demo-0001",
+      "repo": "sample_repo",
+      "language": "python",
+      "title": "修复折扣码大小写",
+      "problem_statement": "discount_amount 对小写折扣码（如 save10）抛 ValidationError。请实现大小写不敏感：strip 后转大写查表；未知码仍抛 ValidationError。",
+      "hidden_tests": ["test_discount_case_hidden.py"],
+      "max_iterations": 8,
+      "timeout_s": 300
+    },
+    {
+      "instance_id": "py-demo-0002",
+      "repo": "sample_repo",
+      "language": "python",
+      "title": "取消订单回滚库存",
+      "problem_statement": "取消订单（PENDING/PAID）必须 release 全部预扣库存，避免泄漏；SHIPPED/CANCELLED 仍抛 InvalidOrderStateError。",
+      "hidden_tests": ["test_cancel_release_hidden.py"],
+      "max_iterations": 8,
+      "timeout_s": 300
+    },
+    {
+      "instance_id": "py-demo-0003",
+      "repo": "sample_repo",
+      "language": "python",
+      "title": "仓库 exists 方法",
+      "problem_statement": "为 InMemoryRepository 增加 exists(key)->bool；空 key 抛 ValueError；删除后返回 False。",
+      "hidden_tests": ["test_repo_exists_hidden.py"],
+      "max_iterations": 6,
+      "timeout_s": 300
+    }
+  ]
+}

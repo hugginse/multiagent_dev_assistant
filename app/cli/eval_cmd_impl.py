@@ -19,6 +19,8 @@ def execute_eval(
     provider: str | None,
     memory: str,
     limit: int | None,
+    adapter: str = "local",
+    data_path: str | None = None,
 ) -> tuple[int, str | None]:
     """返回 (exit_code, report_json_path|None)。"""
     if memory not in {"on", "off"}:
@@ -27,6 +29,7 @@ def execute_eval(
     memory_on = memory == "on"
 
     from app.config import load_settings
+    from app.harness.adapters import get_adapter
     from app.harness.loader import SuiteError, load_tasks
     from app.harness.report import build_report, print_report_table, save_report
     from app.harness.runner import run_single_task
@@ -34,12 +37,23 @@ def execute_eval(
     settings = load_settings()
     prov = provider or settings.llm_provider
     try:
-        tasks = load_tasks(suite)
-    except SuiteError as e:
-        console.print(f"[red]套件加载失败:[/red] {e}")
+        if adapter == "local":
+            tasks = load_tasks(suite)
+        else:
+            ad = get_adapter(adapter, path=data_path) if data_path else get_adapter(adapter)
+            tasks = ad.load_tasks()
+            console.print(f"[dim]adapter={adapter} tasks={len(tasks)}[/dim]")
+    except (SuiteError, ValueError, FileNotFoundError) as e:
+        console.print(f"[red]任务加载失败:[/red] {e}")
+        return 2, None
+    except Exception as e:  # noqa: BLE001
+        console.print(f"[red]adapter 加载失败:[/red] {e}")
         return 2, None
     if limit is not None:
         tasks = tasks[:limit]
+    if not tasks:
+        console.print("[red]无任务可执行[/red]")
+        return 2, None
 
     eval_id = f"eval_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
     items: list[dict] = []
@@ -216,6 +230,8 @@ def execute_memory_ab(
     k: int,
     provider: str | None,
     limit: int | None,
+    adapter: str = "local",
+    data_path: str | None = None,
 ) -> int:
     """记忆 A/B：同套件 memory on → off 双跑，自动 compare。
 
@@ -224,14 +240,26 @@ def execute_memory_ab(
     console.print("[bold]记忆 A/B[/bold]：先 --memory on，再 --memory off，最后 compare")
 
     code_on, path_on = execute_eval(
-        suite=suite, k=k, provider=provider, memory="on", limit=limit
+        suite=suite,
+        k=k,
+        provider=provider,
+        memory="on",
+        limit=limit,
+        adapter=adapter,
+        data_path=data_path,
     )
     if path_on is None:
         return code_on if code_on != 0 else 2
     console.print(f"[green]memory ON[/green] 报告: {path_on}")
 
     code_off, path_off = execute_eval(
-        suite=suite, k=k, provider=provider, memory="off", limit=limit
+        suite=suite,
+        k=k,
+        provider=provider,
+        memory="off",
+        limit=limit,
+        adapter=adapter,
+        data_path=data_path,
     )
     if path_off is None:
         return code_off if code_off != 0 else 2
