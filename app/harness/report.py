@@ -175,9 +175,26 @@ def print_report_table(report: Report) -> None:
             str(it.get("status")),
         )
     console.print(table)
+    # 汇总统计
+    n = len(report.items)
+    resolved = sum(1 for i in report.items if i.get("resolve"))
+    total_wall = sum(float(i.get("wall_s") or 0) for i in report.items)
+    avg_wall = total_wall / n if n else 0.0
+    status_counts: dict[str, int] = {}
+    for i in report.items:
+        st = str(i.get("status") or "?")
+        status_counts[st] = status_counts.get(st, 0) + 1
+    total_iters = sum(int(i.get("iterations") or 0) for i in report.items)
+
     console.print(
-        f"resolve_rate={report.resolve_rate:.2%}  pass@k={report.pass_at_k}  "
-        f"tool_calls={report.tool_calls_by_tier}  max_hit_rate={report.max_hit_rate:.2%}"
+        f"resolve_rate={report.resolve_rate:.2%} ({resolved}/{n})  "
+        f"pass@k={report.pass_at_k}"
+    )
+    console.print(
+        f"tool_calls={report.tool_calls_by_tier}  "
+        f"max_hit_rate={report.max_hit_rate:.2%}  "
+        f"avg_wall={avg_wall:.1f}s  total_wall={total_wall:.1f}s  "
+        f"total_iters={total_iters}  status={status_counts}"
     )
 
 

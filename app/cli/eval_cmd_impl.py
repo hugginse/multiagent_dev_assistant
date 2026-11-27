@@ -51,13 +51,20 @@ def execute_eval(
         BarColumn(),
         TimeElapsedColumn(),
         console=console,
+        transient=False,
     )
     with progress:
-        task_prog = progress.add_task("eval", total=total)
+        task_prog = progress.add_task(f"eval {suite}", total=total)
         for task in tasks:
             for sample in range(1, k + 1):
+                progress.update(
+                    task_prog,
+                    description=f"[cyan]{task.id}[/cyan] {task.title[:24]}",
+                )
                 progress.console.print(
-                    f"[cyan]{task.id}[/cyan] sample={sample}/{k} …", end=" "
+                    f"[dim]{task.id}[/dim] {task.title[:40]} "
+                    f"sample={sample}/{k} …",
+                    end=" ",
                 )
                 try:
                     from app.agents.nodes.llm_bridge import make_streaming_llm
@@ -122,9 +129,11 @@ def execute_eval(
                 ok = m.resolve
                 if not ok:
                     any_fail = True
+                style = "green" if ok else "yellow"
                 progress.console.print(
-                    f"{'[green]resolve[/green]' if ok else '[yellow]miss[/yellow]'} "
-                    f"ratio={m.test_pass_ratio:.2f} it={m.iterations} wall={m.wall_s:.1f}s"
+                    f"[{style}]{'resolve' if ok else 'miss'}[/{style}] "
+                    f"ratio={m.test_pass_ratio:.2f} it={m.iterations} "
+                    f"wall={m.wall_s:.1f}s"
                 )
                 items.append(
                     {
