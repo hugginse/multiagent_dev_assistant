@@ -32,7 +32,8 @@ def discount_amount(subtotal_cents: int, discount_code: str | None) -> int:
         raise ValidationError("subtotal must be non-negative")
     if not discount_code:
         return 0
-    code = discount_code.strip().upper()
+    # BUG(供 T001): 未做大小写归一，小写码会走未知码分支
+    code = discount_code.strip()
     if code not in DISCOUNT_CODES:
         raise ValidationError(f"unknown discount code: {discount_code}")
     pct = DISCOUNT_CODES[code]

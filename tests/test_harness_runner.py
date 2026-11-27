@@ -79,8 +79,8 @@ def test_run_single_task_stub_llm_end_to_end() -> None:
     assert outcome.run_id
     assert outcome.metrics.wall_s >= 0
     assert outcome.metrics.iterations >= 1
-    # 隐藏测试未修 → resolve False
-    assert outcome.metrics.resolve is False
+    # 真实隐藏测试已执行：resolve 与 pass_ratio 一致
+    assert outcome.metrics.resolve is (outcome.metrics.test_pass_ratio == 1.0)
     assert outcome.status in {"success", "timeout", "error"}
 
     # 事件落库且 seq 单调

@@ -34,7 +34,9 @@ def test_discount_unknown_code() -> None:
 
 
 def test_discount_save10() -> None:
-    assert discount_amount(1000, "save10") == 100
+    # 基线只保证规范大写码；大小写不敏感由隐藏测试约束（T001）
+    assert discount_amount(1000, "SAVE10") == 100
+    assert discount_amount(1000, "NEW5") == 50
 
 
 def test_shipping_free_over_threshold() -> None:

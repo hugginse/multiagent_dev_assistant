@@ -8,6 +8,7 @@ architecture.md §5.1：
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from app.sandbox.workspace import ExecResult, run_command
@@ -93,7 +94,7 @@ def make_run_tests(workspace: Path, *, timeout_s: float | None = None, output_li
         verbose: bool = False,
     ) -> str:
         # 固定使用 python -m pytest（避免 PATH 上任意 pytest 二进制）
-        cmd: list[str] = ["python", "-m", "pytest", path]
+        cmd: list[str] = [sys.executable, "-m", "pytest", path]
         if verbose:
             cmd.append("-v")
         else:
@@ -123,7 +124,7 @@ def make_run_lint(workspace: Path, *, timeout_s: float | None = None, output_lim
         except PathJailError as e:
             raise ToolError(str(e)) from e
         # 白名单：仅 ruff check
-        cmd = ["python", "-m", "ruff", "check", path]
+        cmd = [sys.executable, "-m", "ruff", "check", path]
         r = run_command(cmd, cwd=workspace, timeout_s=timeout_s, output_limit=output_limit)
         return _format_result(r)
 

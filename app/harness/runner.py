@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import sys
 import time
 import uuid
 from collections.abc import Callable
@@ -129,17 +130,20 @@ def score_hidden_tests(
         dest.write_bytes(p.read_bytes())
         rels.append(rel.as_posix())
 
-    cmd = ["python", "-m", "pytest", "-q", *rels]
+    cmd = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", *rels]
     r = run_command(cmd, cwd=workspace, timeout_s=timeout_s, output_limit=20_000)
     out = (r.stdout + "\n" + r.stderr).strip()
     passed, failed = _parse_pytest_counts(out)
     if r.timed_out:
         return passed, max(failed, 1), out[-2000:], -1
-    if r.returncode == 0 and failed == 0 and passed > 0:
+    if r.returncode == 0:
+        if passed == 0 and failed == 0:
+            # -q 全绿可能只有点号：按收集到的隐藏测试文件数计
+            passed = max(1, len(rels))
         return passed, 0, out[-2000:], 0
-    if r.returncode == 0 and passed == 0:
-        return 0, 1, out[-2000:], r.returncode
-    return passed, max(failed, 1 if passed == 0 and failed == 0 else failed), out[-2000:], r.returncode
+    if passed == 0 and failed == 0:
+        failed = 1
+    return passed, failed, out[-2000:], r.returncode
 
 
 def _parse_pytest_counts(output: str) -> tuple[int, int]:
@@ -231,7 +235,7 @@ def run_single_task(
         def _default_on_test(state: AgentState) -> TestRecord:
             it = int(state.get("iteration") or 0)
             r = run_command(
-                ["python", "-m", "pytest", "-q", "tests"],
+                [sys.executable, "-m", "pytest", "-q", "tests"],
                 cwd=ws,
                 timeout_s=min(task.timeout_s, 120.0),
                 output_limit=8000,
