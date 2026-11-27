@@ -174,6 +174,7 @@ def run_single_task(
     on_node_test: Callable[[AgentState], TestRecord] | None = None,
     with_hidden_scoring: bool = True,
     event_subscribers: list[Callable[[Any], None]] | None = None,
+    llm_emit_holder: dict[str, Any] | None = None,
 ) -> RunOutcome:
     """端到端执行一个任务。session 为 None 时自建事务。
 
@@ -211,6 +212,8 @@ def run_single_task(
         events = EventStore(session, rid)
         for sub in event_subscribers or []:
             events.subscribe(sub)
+        if llm_emit_holder is not None:
+            llm_emit_holder["events"] = events
 
         events.emit(
             EventType.RUN_STARTED,
@@ -234,6 +237,10 @@ def run_single_task(
 
         def _default_on_test(state: AgentState) -> TestRecord:
             it = int(state.get("iteration") or 0)
+            events.emit(
+                EventType.TOOL_CALL,
+                {"name": "run_tests", "args": {"path": "tests"}, "node": "agent"},
+            )
             r = run_command(
                 [sys.executable, "-m", "pytest", "-q", "tests"],
                 cwd=ws,
@@ -241,11 +248,21 @@ def run_single_task(
                 output_limit=8000,
             )
             passed, failed = _parse_pytest_counts((r.stdout + r.stderr).strip())
+            tail = (r.stdout + r.stderr)[-1500:]
+            events.emit(
+                EventType.TOOL_RESULT,
+                {
+                    "name": "run_tests",
+                    "ok": r.returncode == 0,
+                    "summary": f"passed={passed} failed={failed} rc={r.returncode}",
+                    "output_tail": tail,
+                },
+            )
             return TestRecord(
                 iteration=it,
                 passed=passed,
                 failed=failed,
-                output_tail=(r.stdout + r.stderr)[-1500:],
+                output_tail=tail,
                 returncode=r.returncode,
             )
 

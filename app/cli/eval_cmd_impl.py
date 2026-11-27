@@ -60,12 +60,42 @@ def execute_eval(
                     f"[cyan]{task.id}[/cyan] sample={sample}/{k} …", end=" "
                 )
                 try:
+                    from app.agents.nodes.llm_bridge import make_streaming_llm
+                    from app.config import Settings
+                    from app.llm.client import create_llm_client
+
+                    run_settings = Settings(
+                        _env_file=None,
+                        llm_provider=prov,
+                        ollama_host=settings.ollama_host,
+                        local_model=settings.local_model,
+                        ollama_num_ctx=settings.ollama_num_ctx,
+                        openai_api_key=settings.openai_api_key,
+                        openai_base_url=settings.openai_base_url,
+                        openai_model=settings.openai_model,
+                        anthropic_api_key=settings.anthropic_api_key,
+                        anthropic_model=settings.anthropic_model,
+                    )
+                    client = create_llm_client(run_settings)
+                    holder: dict = {}
+
+                    def _emit(text: str, _h=holder) -> None:
+                        ev = _h.get("events")
+                        if ev is not None:
+                            from app.events import EventType
+
+                            ev.emit(EventType.LLM_DELTA, {"node": "agent", "text": text})
+
+                    llm_fn = make_streaming_llm(client, emit_delta=_emit)
                     outcome = run_single_task(
                         task,
                         suite=suite,
                         provider=prov,
                         memory_on=memory_on,
+                        llm=llm_fn,
+                        llm_emit_holder=holder,
                     )
+                    client.close()
                 except Exception as e:  # noqa: BLE001
                     progress.console.print(f"[red]error:[/red] {e}")
                     any_fail = True

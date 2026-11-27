@@ -55,8 +55,9 @@ def agent_node(
     # --- LLM：生成/更新计划与草稿 ---
     llm_fn = llm or _default_llm
     text = llm_fn("", task, state)
-    if events is not None:
-        # 逐段 delta（stub 无真实 token 流时按行模拟；真实 LLM 在 runner 里接真流式）
+    # 真流式 LLM（llm_bridge）已通过 emit_delta 落库；否则按行补发（含 mock/stub）
+    already_streamed = bool(getattr(llm_fn, "streamed", False))
+    if events is not None and not already_streamed:
         for line in text.splitlines(keepends=True):
             events.emit(EventType.LLM_DELTA, {"node": "agent", "text": line})
 

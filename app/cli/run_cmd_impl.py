@@ -45,6 +45,42 @@ def execute_run(
 
     viewer = TerminalEventSubscriber(show_llm_delta=show_llm, console_=console)
 
+    # 真实 LLM 流式桥接：llm_delta 经 EventStore 落库 → 订阅者打印
+    from app.agents.nodes.llm_bridge import make_streaming_llm
+    from app.config import Settings
+    from app.llm.client import create_llm_client
+
+    run_settings = Settings(
+        _env_file=None,
+        llm_provider=prov,
+        ollama_host=settings.ollama_host,
+        local_model=settings.local_model,
+        ollama_num_ctx=settings.ollama_num_ctx,
+        openai_api_key=settings.openai_api_key,
+        openai_base_url=settings.openai_base_url,
+        openai_model=settings.openai_model,
+        anthropic_api_key=settings.anthropic_api_key,
+        anthropic_model=settings.anthropic_model,
+    )
+    try:
+        client = create_llm_client(run_settings)
+    except Exception as e:  # noqa: BLE001
+        console.print(f"[red]LLM 客户端创建失败:[/red] {e}")
+        return 2
+
+    # emit 闭包：由 run_single_task 在拿到 events 后通过 llm_fn 捕获太晚，
+    # 这里改为延迟绑定——runner 内 emit_delta 注入（见下）
+    _holder: dict = {}
+
+    def _emit(text: str) -> None:
+        events = _holder.get("events")
+        if events is not None:
+            from app.events import EventType
+
+            events.emit(EventType.LLM_DELTA, {"node": "agent", "text": text})
+
+    llm_fn = make_streaming_llm(client, emit_delta=_emit)
+
     try:
         outcome = run_single_task(
             task,
@@ -52,11 +88,15 @@ def execute_run(
             provider=prov,
             memory_on=memory_on,
             event_subscribers=[viewer],
+            llm=llm_fn,
+            llm_emit_holder=_holder,
         )
     except Exception as e:  # noqa: BLE001
         viewer.finish()
         console.print(f"[red]运行失败:[/red] {e}")
         return 2
+    finally:
+        client.close()
     viewer.finish()
 
     m = outcome.metrics
