@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Ruff check
+        run: uv run ruff check .
+
+      - name: Pytest
+        # 不在 CI 跑全量 harness/真实 LLM——需本地 Ollama（见 architecture.md §2）
+        run: uv run pytest -q
+        env:
+          # 测试一律用临时路径，避免写仓库 data/
+          DATABASE_URL: sqlite:///./.ci-test.db
+          WORKSPACE_ROOT: ./.ci-workspaces
+          CHROMA_DIR: ./.ci-chroma
