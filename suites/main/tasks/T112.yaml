@@ -1,0 +1,16 @@
+id: T112
+title: 折扣码注册表可扩展
+repo: sample_repo
+difficulty: hard
+prompt: |
+  重构折扣码：新增 register_discount_code(code: str, percent: int) 公共函数，
+  - percent 必须在 1..100，否则 ValueError
+  - code 规范化为大写 strip
+  - 未知码仍抛 ValidationError
+  - DISCOUNT_CODES 继续作为默认注册表可用
+  保持 discount_amount/grand_total 行为兼容。
+hidden_tests:
+  - test_register_discount_hidden.py
+max_iterations: 8
+timeout_s: 300
+tags: [refactor, pricing]

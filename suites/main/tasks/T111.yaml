@@ -1,0 +1,15 @@
+id: T111
+title: CLI 增加 count 子命令
+repo: sample_repo
+difficulty: easy
+prompt: |
+  在 orderlib.cli 增加 `count` 子命令：打印演示服务中订单数（初始为 0）与
+  库存 SKU 数量，格式两行：
+  orders: <n>
+  skus: <n>
+  保证 `python -m orderlib.cli count` 返回 0。
+hidden_tests:
+  - test_cli_count_hidden.py
+max_iterations: 6
+timeout_s: 300
+tags: [feature, cli]

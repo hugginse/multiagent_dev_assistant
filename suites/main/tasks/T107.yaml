@@ -1,0 +1,14 @@
+id: T107
+title: 仓储 exists 方法
+repo: sample_repo
+difficulty: medium
+prompt: |
+  为 InMemoryRepository 增加 exists(key: str) -> bool 方法：
+  - 空 key 抛 ValueError
+  - 存在返回 True，否则 False
+  - 不改变 get/delete 语义
+hidden_tests:
+  - test_repo_exists_hidden.py
+max_iterations: 6
+timeout_s: 300
+tags: [feature, repository]

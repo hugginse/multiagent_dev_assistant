@@ -1,0 +1,15 @@
+id: T102
+title: 运费计算拒绝负数并保持满额包邮
+repo: sample_repo
+difficulty: easy
+prompt: |
+  calculate_shipping 对负数金额目前抛 ShippingError，这是对的；但请确认：
+  - 负数抛 ShippingError
+  - express=True 时固定返回 BASE_SHIPPING_CENTS*2，即使满额也不包邮
+  - 非 express 且金额 >= FREE_SHIPPING_THRESHOLD_CENTS 返回 0
+  如有缺陷请修复，并保证 `python -m pytest -q` 全绿。
+hidden_tests:
+  - test_shipping_rules_hidden.py
+max_iterations: 6
+timeout_s: 300
+tags: [bugfix, pricing]

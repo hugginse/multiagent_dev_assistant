@@ -1,0 +1,13 @@
+id: T101
+title: 修复折扣码大小写不敏感
+repo: sample_repo
+difficulty: easy
+prompt: |
+  discount_amount 目前只认大写折扣码（如 SAVE10），小写 save10 会抛 ValidationError。
+  请实现折扣码大小写不敏感：strip 后统一转大写再查表；未知码仍抛 ValidationError。
+  运行 `python -m pytest -q` 保证现有测试通过。
+hidden_tests:
+  - test_discount_case_hidden.py
+max_iterations: 8
+timeout_s: 300
+tags: [bugfix, pricing]

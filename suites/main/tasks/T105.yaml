@@ -1,0 +1,13 @@
+id: T105
+title: 按状态过滤订单列表
+repo: sample_repo
+difficulty: easy
+prompt: |
+  OrderService.list_orders 目前忽略状态过滤或实现不完整。
+  请实现：list_orders(status=None) 返回全部订单；status 为 OrderStatus 时只返回该状态订单。
+  保证 `python -m pytest -q` 全绿。
+hidden_tests:
+  - test_list_orders_filter_hidden.py
+max_iterations: 6
+timeout_s: 300
+tags: [feature, orders]

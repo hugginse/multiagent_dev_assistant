@@ -1,0 +1,16 @@
+id: T103
+title: 订单条目数与单条数量上限校验
+repo: sample_repo
+difficulty: medium
+prompt: |
+  在 OrderService.create_order 中实现校验（常量见 constants.py）：
+  - 不同 SKU 条目数不得超过 MAX_ITEMS_PER_ORDER
+  - 单条 quantity 不得超过 MAX_QUANTITY_PER_ITEM
+  - 校验必须发生在库存扣减之前，失败不得泄漏库存
+  - 超限抛 ValidationError
+  补充测试并保证 `python -m pytest -q` 全绿。
+hidden_tests:
+  - test_order_limits_hidden.py
+max_iterations: 8
+timeout_s: 300
+tags: [feature, validation]

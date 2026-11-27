@@ -1,0 +1,13 @@
+id: T109
+title: 单笔订单金额上限
+repo: sample_repo
+difficulty: medium
+prompt: |
+  增加单笔订单总额上限校令：grand_total 结果不得超过 10_000_000 分（10万元）。
+  超出时 create_order 应抛 ValidationError 且不泄漏库存。
+  可在 pricing 或 orders 层实现，保持现有 API。
+hidden_tests:
+  - test_order_amount_cap_hidden.py
+max_iterations: 8
+timeout_s: 300
+tags: [feature, validation]

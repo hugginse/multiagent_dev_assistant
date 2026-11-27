@@ -1,0 +1,13 @@
+id: T106
+title: 取消订单必须回滚预扣库存
+repo: sample_repo
+difficulty: easy
+prompt: |
+  下单时会 reserve 库存；取消订单（PENDING 或 PAID）必须 release 全部预扣量，
+  否则库存泄漏。请检查 cancel 实现，确保取消后库存恢复到下单前，
+  且 SHIPPED/CANCELLED 仍抛 InvalidOrderStateError。
+hidden_tests:
+  - test_cancel_release_hidden.py
+max_iterations: 6
+timeout_s: 300
+tags: [bugfix, orders]

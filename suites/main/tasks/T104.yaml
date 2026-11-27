@@ -1,0 +1,16 @@
+id: T104
+title: 运费多档费率重构
+repo: sample_repo
+difficulty: hard
+prompt: |
+  将 calculate_shipping 重构为可扩展的多档费率结构：
+  - 档位数据结构化（阈值列表或策略表），便于后续配置化
+  - 保持现有语义：基础运费、满额包邮、express 固定双倍基础运费
+  - 负数仍抛 ShippingError
+  - grand_total 行为不变
+  运行 `python -m pytest -q` 保证兼容。
+hidden_tests:
+  - test_shipping_tiers_hidden.py
+max_iterations: 8
+timeout_s: 300
+tags: [refactor, pricing]

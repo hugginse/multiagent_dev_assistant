@@ -1,0 +1,15 @@
+id: T110
+title: 订单号前缀校验与重置
+repo: sample_repo
+difficulty: hard
+prompt: |
+  new_order_id 的前缀校验目前只允许字母数字。请增强：
+  - 前缀长度至少 2 个字符（单字符前缀 ValueError）
+  - reset_id_counter 后再次生成序号从 1 开始
+  - 保持现有格式 prefix-NNNNNN-hex8
+  同时确保 create_order 使用 constants.ORDER_ID_PREFIX。
+hidden_tests:
+  - test_order_id_prefix_hidden.py
+max_iterations: 8
+timeout_s: 300
+tags: [bugfix, utils]

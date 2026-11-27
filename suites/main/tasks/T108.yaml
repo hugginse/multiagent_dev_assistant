@@ -1,0 +1,13 @@
+id: T108
+title: 抽取定价魔数到 constants
+repo: sample_repo
+difficulty: medium
+prompt: |
+  将 pricing.py 中的 FREE_SHIPPING_THRESHOLD_CENTS、BASE_SHIPPING_CENTS
+  迁移到 constants.py 并从 pricing 导入使用（保持原模块级名称可导入）。
+  禁止改变数值语义。保证 `python -m pytest -q` 全绿。
+hidden_tests:
+  - test_pricing_constants_import_hidden.py
+max_iterations: 6
+timeout_s: 300
+tags: [refactor, constants]
