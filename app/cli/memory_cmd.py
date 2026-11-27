@@ -29,7 +29,7 @@ def onboarding(
         raise typer.Exit(2)
 
     console.print(f"扫描 {p.resolve()} …")
-    result = run_onboarding(p, memory_on=not dry_run)
+    result = run_onboarding(p, memory_onboarding=not dry_run)
 
     if result.status != "done":
         console.print(f"[red]onboarding 失败:[/red] {result.error}")

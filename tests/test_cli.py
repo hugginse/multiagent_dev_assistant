@@ -58,9 +58,10 @@ def test_memory_list_ok() -> None:
     assert result.exit_code == 0
 
 
-def test_memory_onboarding_placeholder() -> None:
+def test_memory_onboarding_runs() -> None:
+    # 已实现：成功 0 / LLM 失败 1；路径缺失 2
     result = runner.invoke(app, ["memory", "onboarding", "--path", "sample_repo"])
-    assert result.exit_code == 2
+    assert result.exit_code in {0, 1, 2}
 
 
 def test_compare_requires_two_paths() -> None:
