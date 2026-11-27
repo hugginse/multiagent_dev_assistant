@@ -277,6 +277,11 @@ def run_single_task(
 
         on_test = on_node_test or _default_on_test
 
+        # 节点级工具授权硬校验（registry 层）
+        from app.tools.build import build_registry
+
+        tool_registry = build_registry(ws, timeout_s=min(task.timeout_s, 120.0))
+
         cp = create_checkpointer()
         graph = build_graph(
             llm=llm,
@@ -284,8 +289,11 @@ def run_single_task(
             on_test=on_test,
             checkpointer=cp,
             five_node=True,
+            tools=tool_registry,
+            workspace=ws,
         )
         state = initial_state(task, memory_context=memory_context)
+        state["workspace"] = str(ws)
         started = time.monotonic()
         try:
             final: AgentState = graph.invoke(

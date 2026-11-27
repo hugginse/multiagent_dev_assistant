@@ -45,12 +45,25 @@ def planner_node(
     *,
     llm: Any | None = None,
     events: Any | None = None,
+    tools: Any | None = None,
     **_: Any,
 ) -> AgentState:
     task: TaskDefinition = state["task"]
     state["node"] = "planner"
     if events is not None:
         events.emit(EventType.NODE_ENTER, {"node": "planner", "iteration": state.get("iteration")})
+
+    # planner 仅 R+M：尝试记忆检索（越权写/执行会 rejected）
+    if tools is not None:
+        from app.agents.nodes.tool_dispatch import dispatch_tool
+
+        dispatch_tool(
+            tools,
+            events,
+            node="planner",
+            name="memory_search",
+            args={"q": task.title},
+        )
 
     if llm is not None:
         text = llm("", task, state)

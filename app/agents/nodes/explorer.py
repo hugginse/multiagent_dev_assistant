@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.agents.nodes.tool_dispatch import dispatch_tool
 from app.agents.state import AgentState
 from app.events import EventType
 from app.harness.schema import TaskDefinition
@@ -19,35 +20,30 @@ def explorer_node(
     **_: Any,
 ) -> AgentState:
     task: TaskDefinition = state["task"]
+    state["node"] = "explorer"
     if events is not None:
         events.emit(EventType.NODE_ENTER, {"node": "explorer", "iteration": state.get("iteration")})
 
     exploration: dict[str, str] = dict(state.get("exploration") or {})
 
-    # 有工具时做一次只读探查（硬校验 node=explorer 仅 R）
-    if tools is not None and workspace is not None:
-        try:
-            tools.call(
-                "list_dir",
-                {"path": ".", "recursive": False},
-                node="explorer",
-            )
-            if events is not None:
-                events.emit(
-                    EventType.TOOL_CALL,
-                    {"name": "list_dir", "args": {"path": "."}, "node": "explorer"},
-                )
-                events.emit(
-                    EventType.TOOL_RESULT,
-                    {"name": "list_dir", "ok": True, "summary": "workspace root listed"},
-                )
-        except Exception as e:  # noqa: BLE001 — 工具错误回灌
-            if events is not None:
-                events.emit(EventType.TOOL_RESULT, {"name": "list_dir", "ok": False, "summary": str(e)})
+    # 只读探查（硬校验：explorer 仅 R）
+    if tools is not None:
+        ok, summary = dispatch_tool(
+            tools,
+            events,
+            node="explorer",
+            name="list_dir",
+            args={"path": ".", "recursive": False},
+        )
+        if ok:
+            for line in summary.splitlines():
+                if "/" in line or line.endswith("/"):
+                    key = line.split()[0].rstrip("/")
+                    if key and len(key) < 120:
+                        exploration.setdefault(key, "listed")
 
     if llm is not None:
         text = llm("", task, state)
-        # 解析 EXPLORATION 段或按行 key: value
         for line in text.splitlines():
             if ":" in line and not line.startswith("PLAN"):
                 k, _, v = line.partition(":")
@@ -55,16 +51,21 @@ def explorer_node(
                 if k and v and len(k) < 120:
                     exploration[k] = v
     else:
-        # 确定性 stub：写入任务相关已知路径摘要
         exploration.setdefault("orderlib/pricing.py", "折扣与运费计算")
         exploration.setdefault("orderlib/orders.py", "下单服务")
         exploration.setdefault("tests/", "单元测试目录")
         if events is not None:
-            note = "explorer stub: 已索引已知模块\n"
-            events.emit(EventType.LLM_DELTA, {"node": "explorer", "text": note})
+            events.emit(
+                EventType.LLM_DELTA,
+                {"node": "explorer", "text": "explorer stub: 已索引已知模块\n"},
+            )
+
+    # explorer **不得**写文件：若被误传 write 工具，dispatch 会记 rejected（负向覆盖）
+    if tools is not None and workspace is not None:
+        # 不主动调用；负向路径由测试保证
+        pass
 
     state["exploration"] = exploration
-    state["node"] = "explorer"
     if events is not None:
         events.emit(
             EventType.NODE_EXIT,
