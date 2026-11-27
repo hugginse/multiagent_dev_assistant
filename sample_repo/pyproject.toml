@@ -1,0 +1,11 @@
+[project]
+name = "orderlib"
+version = "0.1.0"
+description = "Demo order service for multiagent_dev_assistant suites"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
